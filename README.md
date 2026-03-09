@@ -1,4 +1,4 @@
-# CoVT
+# CrystaL
 
 A visual language model training framework based on Qwen2.5-VL.
 
