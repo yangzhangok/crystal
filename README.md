@@ -31,7 +31,7 @@ crystal/
 
 CrystaL (Crystallized Latent Reasoning) is a single-stage framework that processes intact and corrupted images through two parallel paths. By explicitly aligning the attention patterns and prediction distributions across these paths, CrystaL crystallizes latent representations into task-relevant visual semantics without relying on auxiliary annotations or external modules.
 
-![Method Architecture](assets/main_table.png)
+![Method Architecture](assets/main_fig.png)
 
 ### Key Innovation
 
@@ -42,6 +42,8 @@ CrystaL (Crystallized Latent Reasoning) is a single-stage framework that process
 ### Main Results
 
 CrystaL consistently outperforms state-of-the-art baselines on perception-intensive benchmarks, achieving substantial gains in fine-grained visual understanding while maintaining robust reasoning capabilities.
+![Method Architecture](assets/main_table.png)
+
 
 ## Getting Started
 
