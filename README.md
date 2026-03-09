@@ -1,6 +1,6 @@
 # CrystaL
 
-A visual language model training framework based on Qwen2.5-VL.
+An official repository of article: [CrystaL: Spontaneous Emergence of Visual Latents in MLLMs](https://arxiv.org/abs/2602.20980)
 
 ## Quick Links
 
