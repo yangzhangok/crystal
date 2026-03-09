@@ -10,11 +10,4 @@ python -m pip install --upgrade pip
 echo ">>> Installing Qwen2.5-VL dependencies"
 pip install -r requirements.txt
 
-# ===== Installing other visual models dependencies =====
-echo ">>> Installing Segment Anything"
-pip install git+https://github.com/facebookresearch/segment-anything.git
-
-echo ">>> Installing Depth Anything v2"
-pip install -r src/anchors/DepthAnything/requirements.txt
-
 echo ">>> Installation finished."

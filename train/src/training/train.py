@@ -11,7 +11,7 @@ import pathlib
 from liger_kernel.transformers import apply_liger_kernel_to_qwen2_vl
 from monkey_patch_forward import replace_qwen2_5_with_mixed_modality_forward, replace_qwen_2_with_mixed_modality_forward
 
-from training.covt_qwen2_5_vl import CoVTForConditionalGeneration
+from training.crystal_qwen2_5_vl import CrystaL_ForConditionalGeneration
 from training.constants import *
 from deepspeed import zero
 
@@ -143,7 +143,7 @@ def train():
             )
         ))
 
-    model = CoVTForConditionalGeneration.from_pretrained(
+    model = CrystaL_ForConditionalGeneration.from_pretrained(
         model_args.model_path,
         torch_dtype=compute_dtype,
         attn_implementation="flash_attention_2" if not training_args.disable_flash_attn2 else "sdpa", 

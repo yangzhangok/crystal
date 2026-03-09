@@ -78,7 +78,7 @@ def encode_image(image, predictor):
     features = predictor.get_image_embedding().detach()
     return features
 
-class CoVTForConditionalGeneration(Qwen2_5_VLPreTrainedModel, GenerationMixin):
+class CrystaL_ForConditionalGeneration(Qwen2_5_VLPreTrainedModel, GenerationMixin):
         
     _tied_weights_keys = ["lm_head.weight"]
     config_class = Qwen2_5_VLConfig
