@@ -9,7 +9,7 @@ An official repository of article: [CrystaL: Spontaneous Emergence of Visual Lat
 
 ## Overview
 
-CoVT is a vision-language model built on Qwen2.5-VL, featuring advanced capabilities in visual understanding and reasoning.
+CrystaL is a vision-language model built on Qwen2.5-VL, featuring advanced capabilities in visual understanding and reasoning.
 
 ## Project Structure
 
