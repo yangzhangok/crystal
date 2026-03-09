@@ -15,6 +15,7 @@ CrystaL is a vision-language model built on Qwen2.5-VL, featuring advanced capab
 
 ```
 crystal/
+├── assets/                 # Paper figures and tables
 ├── docs/                  # Documentation
 │   ├── TRAIN.md          # Training instructions
 │   └── EVAL.md           # Evaluation instructions
@@ -25,6 +26,22 @@ crystal/
 │   └── install_training.sh
 └── ...
 ```
+
+## Method Overview
+
+CrystaL (Crystallized Latent Reasoning) is a single-stage framework that processes intact and corrupted images through two parallel paths. By explicitly aligning the attention patterns and prediction distributions across these paths, CrystaL crystallizes latent representations into task-relevant visual semantics without relying on auxiliary annotations or external modules.
+
+![Method Architecture](assets/main_table.png)
+
+### Key Innovation
+
+- **Dual-path Processing**: Simultaneously process intact and corrupted images
+- **Attention Pattern Alignment**: Align attention maps between the two paths
+- **Prediction Distribution Alignment**: Align output distributions for consistent reasoning
+
+### Main Results
+
+CrystaL consistently outperforms state-of-the-art baselines on perception-intensive benchmarks, achieving substantial gains in fine-grained visual understanding while maintaining robust reasoning capabilities.
 
 ## Getting Started
 
