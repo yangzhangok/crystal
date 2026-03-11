@@ -105,3 +105,21 @@ See [EVAL.md](docs/EVAL.md) for more details.
 - Python environment with PyTorch
 - Qwen2.5-VL dependencies
 - GPU with sufficient memory for training
+
+## Citation
+
+If you use this toolbox or benchmark in your research, please cite this project.
+
+```bibtex
+@article{zhang2026crystal,
+  title={CrystaL: Spontaneous Emergence of Visual Latents in MLLMs},
+  author={Zhang, Yang and Li, Danyang and Li, Yuxuan and Zhang, Xin and Xie, Tianyu and Cheng, Mingming and Li, Xiang},
+  journal={arXiv},
+  year={2026}
+}
+```
+
+
+## License
+Licensed under a [Creative Commons Attribution-NonCommercial 4.0 International](https://creativecommons.org/licenses/by-nc/4.0/) for Non-commercial use only.
+Any commercial use should get formal permission first.
