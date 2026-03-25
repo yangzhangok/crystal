@@ -1,4 +1,8 @@
 #!/bin/bash
+export BNB_CUDA_VERSION=121
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/home/u2112666/anaconda3/envs/covt/lib
+export CUDA_VISIBLE_DEVICES=0,1,2,3
+
 
 MODEL_NAME="${MODEL_NAME:-Qwen/Qwen2.5-VL-7B-Instruct}"
 MODEL_PATH="${MODEL_PATH:-Qwen/Qwen2.5-VL-7B-Instruct}"
@@ -78,7 +82,6 @@ deepspeed \
     --deepspeed scripts/zero2.json \
     --report_to wandb \
     --run_name "${RUN_NAME}" \
-    --anchor_model_id "$VISUAL_MODEL_ID" \
     --training_stage "full" \
     --stage_0_step $((STAGE_0_STEP * BATCH_PER_DEVICE)) \
     --stage_1_step $((STAGE_1_STEP * BATCH_PER_DEVICE)) \

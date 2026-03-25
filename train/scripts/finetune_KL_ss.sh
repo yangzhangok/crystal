@@ -1,13 +1,13 @@
 set -e
 
 export CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
-BASE_MODEL="/public/home/zy/qwen2.5vl-7b" 
+BASE_MODEL="/home/u2112666/checkpoint/QwenVL/qwen2.5vl-7b" 
 
 OUT_DIR_STAGE234="output/lora_vision_test/lora_full_test"
 FINAL_MERGED_MODEL="output/lora_merged/lora_full_test"
 
-DATA_PATH="/public/home/zy/covt-collection/data.json"
-IMAGE_FOLDER="/public/home/zy/covt-collection/images"
+DATA_PATH="/home/u2112666/covt-dataset/data.json"
+IMAGE_FOLDER="/home/u2112666/covt-dataset/images"
 
 VISUAL_MODEL_ID="[]" #,'dino'
 
