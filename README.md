@@ -63,7 +63,7 @@ Follow the instructions in [TRAIN.md](docs/TRAIN.md) for training environment se
 
 3. Run training:
    ```bash
-   bash scripts/finetune.sh
+   bash scripts/finetune_KL_ss.sh
    ```
 
 The final checkpoint will be saved under `train/output/lora_merged`.
