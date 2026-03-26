@@ -1,14 +1,9 @@
 #!/bin/bash
-export BNB_CUDA_VERSION=121
-export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/home/u2112666/anaconda3/envs/covt/lib
-export CUDA_VISIBLE_DEVICES=0,1,2,3
-
 
 MODEL_NAME="${MODEL_NAME:-Qwen/Qwen2.5-VL-7B-Instruct}"
 MODEL_PATH="${MODEL_PATH:-Qwen/Qwen2.5-VL-7B-Instruct}"
 
 export MASTER_PORT=22810
-export CUDA_VISIBLE_DEVICES=0,1,2,3
 export PYTHONPATH=src:$PYTHONPATH
 export WANDB_PROJECT="${WANDB_PROJECT:-Qwen_BASE}"
 export WANDB_MODE=offline

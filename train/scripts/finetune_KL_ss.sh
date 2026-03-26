@@ -1,15 +1,18 @@
 set -e
 
-export CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
-BASE_MODEL="/home/u2112666/checkpoint/QwenVL/qwen2.5vl-7b" 
+export BNB_CUDA_VERSION=121
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/home/u1120230285/miniconda3//envs/covt/lib
+export CUDA_VISIBLE_DEVICES=0,1,2,3
+
+BASE_MODEL="/home/u1120230285/zhangyang/checkpoints/qwen2.5vl-7b" 
 
 OUT_DIR_STAGE234="output/lora_vision_test/lora_full_test"
 FINAL_MERGED_MODEL="output/lora_merged/lora_full_test"
 
-DATA_PATH="/home/u2112666/covt-dataset/data.json"
-IMAGE_FOLDER="/home/u2112666/covt-dataset/images"
+DATA_PATH="/home/u1120230285/zhangyang/covt-dataset/data.json"
+IMAGE_FOLDER="/home/u1120230285/zhangyang/covt-dataset/images"
 
-VISUAL_MODEL_ID="[]" #,'dino'
+# VISUAL_MODEL_ID="[]" #,'dino'
 
 MODEL_NAME="$BASE_MODEL" \
 MODEL_PATH="$BASE_MODEL" \
@@ -28,7 +31,7 @@ ATTENTION_DROP=False \
 MAX_STEPS=4000 \
 DATA_PATH="$DATA_PATH" \
 IMAGE_FOLDER="$IMAGE_FOLDER" \
-VISUAL_MODEL_ID="$VISUAL_MODEL_ID" \
+# VISUAL_MODEL_ID="$VISUAL_MODEL_ID" \
 bash scripts/run_self_supervise.sh
 
 
@@ -37,7 +40,7 @@ echo "==== [4/4] Second merge LoRA (final) ===="
 MODEL_NAME="$BASE_MODEL" \
 MODEL_PATH="$OUT_DIR_STAGE234" \
 SAVE_MODEL_PATH="$FINAL_MERGED_MODEL" \
-VISUAL_MODEL_ID="$VISUAL_MODEL_ID" \
+# VISUAL_MODEL_ID="$VISUAL_MODEL_ID" \
 bash scripts/merge_lora.sh
 
 echo "==== All processes completed, final model: $FINAL_MERGED_MODEL ===="
