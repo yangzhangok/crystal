@@ -4,10 +4,10 @@ export BNB_CUDA_VERSION=121
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/home/u1120230285/miniconda3/envs/covt/lib
 export CUDA_VISIBLE_DEVICES=0,1,2,3
 
-BASE_MODEL="/home/u1120230285/zhangyang/checkpoints/qwen3vl-8b" 
+BASE_MODEL="/home/u1120230285/zhangyang/checkpoints/qwen2.5vl-7b" 
 
-OUT_DIR_STAGE234="output/lora_vision_test/lora_qwen3vl"
-FINAL_MERGED_MODEL="output/lora_merged/lora_qwen3vl"
+OUT_DIR_STAGE234="output/lora_vision_test/lora_random_drop_5_10"
+FINAL_MERGED_MODEL="output/lora_merged/lora_random_drop_5_10"
 
 DATA_PATH="/home/u1120230285/zhangyang/covt-dataset/data.json"
 IMAGE_FOLDER="/home/u1120230285/zhangyang/covt-dataset/images"
@@ -18,7 +18,7 @@ IMAGE_FOLDER="/home/u1120230285/zhangyang/covt-dataset/images"
 MODEL_NAME="$BASE_MODEL" \
 MODEL_PATH="$BASE_MODEL" \
 OUTPUT_DIR="$OUT_DIR_STAGE234" \
-RUN_NAME="lora_qwen3vl" \
+RUN_NAME="lora_random_drop_5_10" \
 STAGE_0_STEP=0 \
 STAGE_1_STEP=0 \
 STAGE_2_STEP=3000 \

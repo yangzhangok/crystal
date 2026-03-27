@@ -136,7 +136,7 @@ def create_custom_causal_mask_livr(input_ids, token_ids, dtype=torch.float16, de
     try:
         #import ipdb;ipdb.set_trace()
         idx_sep0 = (torch.where(input_ids == token_ids["vision_start"])[0][0]).item()
-        idx_sep1 = (torch.where(input_ids == token_ids["vision_end"])[0][0] + 1).item()
+        idx_sep1 = (torch.where(input_ids == token_ids["vision_start"])[0][0] + 1).item()
         idx_sep2 = (torch.where(input_ids == token_ids["think_start"])[0][0]).item()
         idx_sep3= (torch.where(input_ids == token_ids["think_end"])[0][0] + 2).item()
 
@@ -186,7 +186,7 @@ def create_custom_causal_mask(input_ids, token_ids, dtype=torch.float16, device=
     try:
         #import ipdb;ipdb.set_trace()
         idx_sep0 = (torch.where(input_ids == token_ids["vision_start"])[0][0]).item()
-        idx_sep1 = (torch.where(input_ids == token_ids["vision_end"])[0][1]).item()
+        idx_sep1 = (torch.where(input_ids == token_ids["vision_start"])[0][1]).item()
         idx_sep2 = idx_sep1+(idx_sep1-idx_sep0)
         idx_sep3 = (torch.where(input_ids == token_ids["think_end"])[0][0] + 1).item()
         idx_sep4 = (torch.where(input_ids == token_ids["answer_start"])[0][1]).item()
@@ -360,7 +360,7 @@ class SupervisedDataset(Dataset):
                         
                         radius_gaussian = 2
                         print("random drop launch!")
-                        radius_gaussian = self.rng.uniform(2.0, 5.0)
+                        radius_gaussian = self.rng.uniform(5.0, 10.0)
                         image_files_damage = image_files.filter(ImageFilter.GaussianBlur(radius=radius_gaussian))
 
                     elif self.data_args.attention_drop == True:
@@ -541,6 +541,9 @@ class SupervisedDataset(Dataset):
         if self.data_args.vloc == True:
 
             index = (torch.where(input_ids == self.special_token_ids["think_start"])[0][0]).item()
+            print("-=-"*20)
+            print(input_ids)
+            print("-=-"*20)
             attention_mask,sequence_index = create_custom_causal_mask(input_ids, self.special_token_ids)
             print("sequence_index",sequence_index)
             
