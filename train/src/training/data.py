@@ -130,17 +130,17 @@ def get_comt_data_in_response_vloc(response, DEFAULT_IM_END_TOKEN):
 
 
 
-def create_custom_causal_mask_livr(input_ids, dtype=torch.float16, device='cuda'):
+def create_custom_causal_mask_livr(input_ids, token_ids, dtype=torch.float16, device='cuda'):
     seq_len = input_ids.shape[0]
 
     try:
         #import ipdb;ipdb.set_trace()
-        idx_sep0 = (torch.where(input_ids == 151652)[0][0]).item()
-        idx_sep1 = (torch.where(input_ids == 151653)[0][0]+1).item()
-        idx_sep2 = (torch.where(input_ids == 151675)[0][0]).item() #<think>
-        idx_sep3= (torch.where(input_ids == 151676)[0][0] + 2).item() #</think>
+        idx_sep0 = (torch.where(input_ids == token_ids["vision_start"])[0][0]).item()
+        idx_sep1 = (torch.where(input_ids == token_ids["vision_end"])[0][0] + 1).item()
+        idx_sep2 = (torch.where(input_ids == token_ids["think_start"])[0][0]).item()
+        idx_sep3= (torch.where(input_ids == token_ids["think_end"])[0][0] + 2).item()
 
-        sep4_candidates = torch.where(input_ids == 151645)[0]
+        sep4_candidates = torch.where(input_ids == token_ids["im_end"])[0]
         if len(sep4_candidates) > 1:
             idx_sep4 = (sep4_candidates[-1] + 2).item()
         else:
@@ -180,18 +180,18 @@ def create_custom_causal_mask_livr(input_ids, dtype=torch.float16, device='cuda'
     return mask
 
 
-def create_custom_causal_mask(input_ids, dtype=torch.float16, device='cuda'):
+def create_custom_causal_mask(input_ids, token_ids, dtype=torch.float16, device='cuda'):
     seq_len = input_ids.shape[0]
     
     try:
         #import ipdb;ipdb.set_trace()
-        idx_sep0 = (torch.where(input_ids == 151652)[0][0]).item()
-        idx_sep1 = (torch.where(input_ids == 151652)[0][1]).item()
+        idx_sep0 = (torch.where(input_ids == token_ids["vision_start"])[0][0]).item()
+        idx_sep1 = (torch.where(input_ids == token_ids["vision_end"])[0][1]).item()
         idx_sep2 = idx_sep1+(idx_sep1-idx_sep0)
-        idx_sep3 = (torch.where(input_ids == 151676)[0][0] + 1).item() #</think>
-        idx_sep4 = (torch.where(input_ids == 151677)[0][1]).item() #<answer>
+        idx_sep3 = (torch.where(input_ids == token_ids["think_end"])[0][0] + 1).item()
+        idx_sep4 = (torch.where(input_ids == token_ids["answer_start"])[0][1]).item()
         
-        sep5_candidates = torch.where(input_ids == 151645)[0]
+        sep5_candidates = torch.where(input_ids == token_ids["im_end"])[0]
         if len(sep5_candidates) > 1:
             idx_sep5 = (sep5_candidates[-1] + 2).item()
         else:
@@ -301,6 +301,15 @@ class SupervisedDataset(Dataset):
         self.video_min_pixel = data_args.video_min_pixels
         self.video_max_pixel = data_args.video_max_pixels
         self.fps = data_args.fps
+
+        self.special_token_ids = {
+            "vision_start": processor.tokenizer.convert_tokens_to_ids(VISION_START_TOKEN),
+            "vision_end": processor.tokenizer.convert_tokens_to_ids(VISION_END_TOKEN),
+            "think_start": processor.tokenizer.convert_tokens_to_ids("<think>"),
+            "think_end": processor.tokenizer.convert_tokens_to_ids("</think>"),
+            "answer_start": processor.tokenizer.convert_tokens_to_ids("<answer>"),
+            "im_end":processor.tokenizer.convert_tokens_to_ids(DEFAULT_IM_END_TOKEN),
+        }
         
         self.cur_step = 0
         self.stage_0_step = data_args.stage_0_step
@@ -426,9 +435,11 @@ class SupervisedDataset(Dataset):
 
         all_input_ids = [] 
         all_labels = []
+        all_mm_token_type_ids = []
         all_pixel_values = []
         all_image_grid_thw = []
         all_second_gird = []
+        need_mm_token_type_ids = "qwen3" in str(self.model_id).lower()
         
         # Qwen2-VL uses a default system message so I've added this.
         if len(SYSTEM_MESSAGE) > 0:
@@ -438,6 +449,9 @@ class SupervisedDataset(Dataset):
             
             all_input_ids.append(system_message_input_ids.squeeze(0))
             all_labels.append(system_labels.squeeze(0))
+            if need_mm_token_type_ids:
+                # System prompt is text-only, so assign text modality ids.
+                all_mm_token_type_ids.append(torch.zeros_like(system_message_input_ids.squeeze(0), dtype=torch.long))
             
         for _, j in enumerate(range(0, len(sources), 2)):
             
@@ -462,10 +476,13 @@ class SupervisedDataset(Dataset):
                 gpt_response = f"{gpt_response}\n{DEFAULT_IM_END_TOKEN}\n"
             
             # import ipdb; ipdb.set_trace() exit
+            prompt_mm_token_type_ids = None
             
             if DEFAULT_IMAGE_TOKEN in user_input:
                 inputs = processor(text=[user_input], images=images, videos=videos, padding=False, return_tensors='pt')
                 prompt_input_ids = inputs['input_ids']
+                if need_mm_token_type_ids:
+                    prompt_mm_token_type_ids = inputs.get("mm_token_type_ids", None)
                 # raise ValueError('Every man is a poet when he is in love')
                 all_pixel_values.append(inputs[pixel_key])
                 all_image_grid_thw.append(inputs[grid_key])
@@ -475,9 +492,12 @@ class SupervisedDataset(Dataset):
                 
             
             elif DEFAULT_VIDEO_TOKEN in user_input:
-                if "Qwen2.5" in self.model_id:
+                if "Qwen2.5" in self.model_id or "Qwen3" in self.model_id:
                     inputs = processor(text=[user_input], images=images, videos=videos, padding=False, return_tensors='pt', **video_kwargs)
-                    all_second_gird.extend(inputs["second_per_grid_ts"])
+                    if need_mm_token_type_ids:
+                        prompt_mm_token_type_ids = inputs.get("mm_token_type_ids", None)
+                    if "second_per_grid_ts" in inputs:
+                        all_second_gird.extend(inputs["second_per_grid_ts"])
                 else:
                     inputs = processor(text=[user_input], images=images, videos=videos, padding=False, return_tensors='pt')
                 prompt_input_ids = inputs['input_ids']
@@ -486,6 +506,8 @@ class SupervisedDataset(Dataset):
 
             else:
                 prompt_input_ids = processor.tokenizer(user_input, add_special_tokens=False, padding=False, return_tensors='pt')['input_ids']
+                if need_mm_token_type_ids:
+                    prompt_mm_token_type_ids = torch.zeros_like(prompt_input_ids, dtype=torch.long)
 
             response_input_ids = processor.tokenizer(gpt_response, add_special_tokens=False, padding=False, return_tensors='pt')['input_ids']
 
@@ -497,10 +519,20 @@ class SupervisedDataset(Dataset):
                 ],
                 dim=0,
             )
+
+            if need_mm_token_type_ids:
+                if isinstance(prompt_mm_token_type_ids, torch.Tensor):
+                    response_mm_token_type_ids = torch.zeros_like(response_input_ids, dtype=torch.long)
+                    mm_token_type_ids = torch.cat([prompt_mm_token_type_ids, response_mm_token_type_ids], dim=1).squeeze(0)
+                else:
+                    # Safe fallback when processor does not return this field.
+                    mm_token_type_ids = torch.zeros_like(input_ids, dtype=torch.long)
             #import ipdb;ipdb.set_trace()
 
             all_input_ids.append(input_ids)
             all_labels.append(labels)
+            if need_mm_token_type_ids:
+                all_mm_token_type_ids.append(mm_token_type_ids)
         
         # There is no need for eos or bos tokens in the input_ids
         # Qwen2-VL does not use them
@@ -508,8 +540,8 @@ class SupervisedDataset(Dataset):
 
         if self.data_args.vloc == True:
 
-            index = (torch.where(input_ids == 151675)[0][0]).item()
-            attention_mask,sequence_index = create_custom_causal_mask(input_ids)
+            index = (torch.where(input_ids == self.special_token_ids["think_start"])[0][0]).item()
+            attention_mask,sequence_index = create_custom_causal_mask(input_ids, self.special_token_ids)
             print("sequence_index",sequence_index)
             
             if self.data_args.ce_loss == "double":
@@ -560,6 +592,9 @@ class SupervisedDataset(Dataset):
             labels=labels,
         )
 
+        if need_mm_token_type_ids and len(all_mm_token_type_ids) > 0:
+            data_dict["mm_token_type_ids"] = torch.cat(all_mm_token_type_ids, dim=0).to(torch.long)
+
         if pixel_key and grid_key:
             pixel_values = torch.cat(all_pixel_values, dim=0)
             image_thw = torch.cat(all_image_grid_thw, dim=0)
@@ -608,6 +643,7 @@ class DataCollatorForSupervisedDataset(object):
         batch_sequence_index = []
         batch_image_files = []
         batch_attention_masks = []
+        batch_mm_token_type_ids = []
         batch_feature_index = []
         
         for example in examples:
@@ -625,6 +661,9 @@ class DataCollatorForSupervisedDataset(object):
             batch_input_ids.append(example["input_ids"])
             batch_label_ids.append(example["labels"])
             batch_attention_masks.append(example["attention_mask"])
+
+            if "mm_token_type_ids" in keys:
+                batch_mm_token_type_ids.append(example["mm_token_type_ids"])
             
             if "sequence_index" in keys:
                 batch_sequence_index.append(example["sequence_index"])
@@ -667,6 +706,12 @@ class DataCollatorForSupervisedDataset(object):
             'labels': labels,
             'attention_mask': attention_mask,
         }
+
+        if len(batch_mm_token_type_ids) > 0:
+            mm_token_type_ids = pad_sequence(
+                batch_mm_token_type_ids, padding_side='right', padding_value=0
+            )
+            data_dict["mm_token_type_ids"] = mm_token_type_ids
 
         if len(batch_pixel_values) > 0:
             pixel_values = torch.cat(batch_pixel_values, dim=0)

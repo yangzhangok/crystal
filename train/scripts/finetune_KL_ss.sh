@@ -1,23 +1,24 @@
 set -e
 
 export BNB_CUDA_VERSION=121
-export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/home/u1120230285/miniconda3//envs/covt/lib
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/home/u1120230285/miniconda3/envs/covt/lib
 export CUDA_VISIBLE_DEVICES=0,1,2,3
 
-BASE_MODEL="/home/u1120230285/zhangyang/checkpoints/qwen2.5vl-7b" 
+BASE_MODEL="/home/u1120230285/zhangyang/checkpoints/qwen3vl-8b" 
 
-OUT_DIR_STAGE234="output/lora_vision_test/lora_full_test"
-FINAL_MERGED_MODEL="output/lora_merged/lora_full_test"
+OUT_DIR_STAGE234="output/lora_vision_test/lora_qwen3vl"
+FINAL_MERGED_MODEL="output/lora_merged/lora_qwen3vl"
 
 DATA_PATH="/home/u1120230285/zhangyang/covt-dataset/data.json"
 IMAGE_FOLDER="/home/u1120230285/zhangyang/covt-dataset/images"
 
 # VISUAL_MODEL_ID="[]" #,'dino'
 
+# VISUAL_MODEL_ID="$VISUAL_MODEL_ID" \
 MODEL_NAME="$BASE_MODEL" \
 MODEL_PATH="$BASE_MODEL" \
 OUTPUT_DIR="$OUT_DIR_STAGE234" \
-RUN_NAME="lora_full_test" \
+RUN_NAME="lora_qwen3vl" \
 STAGE_0_STEP=0 \
 STAGE_1_STEP=0 \
 STAGE_2_STEP=3000 \
@@ -31,7 +32,6 @@ ATTENTION_DROP=False \
 MAX_STEPS=4000 \
 DATA_PATH="$DATA_PATH" \
 IMAGE_FOLDER="$IMAGE_FOLDER" \
-# VISUAL_MODEL_ID="$VISUAL_MODEL_ID" \
 bash scripts/run_self_supervise.sh
 
 
@@ -45,7 +45,7 @@ bash scripts/merge_lora.sh
 
 echo "==== All processes completed, final model: $FINAL_MERGED_MODEL ===="
 
-cd ../VLMEvalKit/
-CUDA_VISIBLE_DEVICES=4,5,6,7 torchrun --nproc-per-node=4 --master-port=29501 run.py --data BLINK CV-Bench-2D CV-Bench-3D VStarBench HRBench4K HRBench8K RealWorldQA --model lora_full_test --verbose
+# cd ../VLMEvalKit/
+# CUDA_VISIBLE_DEVICES=0,1,2,3 torchrun --nproc-per-node=4 --master-port=29501 run.py --data BLINK CV-Bench-2D CV-Bench-3D VStarBench HRBench4K HRBench8K RealWorldQA --model Crystal_drop_5_10 --verbose
 
 

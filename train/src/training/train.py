@@ -1,14 +1,14 @@
 import os
 import torch
+import transformers
 from peft import LoraConfig, get_peft_model
 import ast
-from transformers import AutoProcessor, BitsAndBytesConfig, HfArgumentParser
+from transformers import AutoProcessor, BitsAndBytesConfig, HfArgumentParser, AutoModelForCausalLM
 from training.trainer import QwenTrainer, UnfreezeLoRACallback
 from training.data import make_supervised_data_module
 from training.params import DataArguments, ModelArguments, TrainingArguments
 from training.train_utils import get_peft_state_maybe_zero_3, get_peft_state_non_lora_maybe_zero_3, safe_save_model_for_hf_trainer
 import pathlib
-from liger_kernel.transformers import apply_liger_kernel_to_qwen2_vl
 from monkey_patch_forward import replace_qwen2_5_with_mixed_modality_forward, replace_qwen_2_with_mixed_modality_forward
 
 from training.crystal_qwen2_5_vl import CrystaL_ForConditionalGeneration
@@ -23,6 +23,40 @@ torch.manual_seed(42)
 def rank0_print(*args):
     if local_rank == 0 or local_rank == '0' or local_rank is None:
         print(*args)
+
+
+def debug_model_devices(stage: str, model):
+    try:
+        device_counts = {}
+        sample_names = {}
+        total_named_params = 0
+
+        for name, param in model.named_parameters():
+            dev = str(param.device)
+            total_named_params += 1
+            device_counts[dev] = device_counts.get(dev, 0) + 1
+            if dev not in sample_names:
+                sample_names[dev] = name
+
+        input_embed_device = None
+        output_embed_device = None
+        if hasattr(model, "get_input_embeddings"):
+            inp = model.get_input_embeddings()
+            if inp is not None and hasattr(inp, "weight"):
+                input_embed_device = str(inp.weight.device)
+        if hasattr(model, "get_output_embeddings"):
+            out = model.get_output_embeddings()
+            if out is not None and hasattr(out, "weight"):
+                output_embed_device = str(out.weight.device)
+
+        rank0_print(
+            f"[DEBUG model_device_summary] stage={stage} total_named_params={total_named_params} "
+            f"device_counts={device_counts} input_embed_device={input_embed_device} "
+            f"output_embed_device={output_embed_device}"
+        )
+        rank0_print(f"[DEBUG model_device_samples] stage={stage} first_param_name_per_device={sample_names}")
+    except Exception as err:
+        rank0_print(f"[DEBUG model_device_summary] stage={stage} failed_to_collect={err}")
 
 def find_target_linear_names(model, num_lora_modules=-1, lora_namespan_exclude=[], verbose=True):
     linear_cls = torch.nn.modules.Linear
@@ -45,18 +79,49 @@ def find_target_linear_names(model, num_lora_modules=-1, lora_namespan_exclude=[
 def set_requires_grad(parameters, requires_grad):
     for p in parameters:
         p.requires_grad = requires_grad
+
+
+def is_qwen3_vl_model(model_name: str) -> bool:
+    name = (model_name or "").lower()
+    return "qwen3" in name and "vl" in name
+
+
+def resolve_vision_tower(model):
+    if hasattr(model, "visual"):
+        return model.visual
+    if hasattr(model, "vision_tower"):
+        return model.vision_tower
+    if hasattr(model, "model") and hasattr(model.model, "visual"):
+        return model.model.visual
+    return None
+
+
+def resolve_merger_module(vision_tower):
+    if vision_tower is None:
+        return None
+    if hasattr(vision_tower, "merger"):
+        return vision_tower.merger
+    if hasattr(vision_tower, "vision_merger"):
+        return vision_tower.vision_merger
+    return None
         
 
 def configure_vision_tower(model, training_args, compute_dtype, device):
-    vision_tower = model.visual
+    vision_tower = resolve_vision_tower(model)
+    if vision_tower is None:
+        rank0_print("WARNING: Vision tower not found. Skipping vision tower configuration.")
+        return
+
     vision_tower.to(dtype=compute_dtype, device=device)
 
-    vision_model_params = model.visual.parameters()
+    vision_model_params = vision_tower.parameters()
     set_requires_grad(vision_model_params, not training_args.freeze_vision_tower)
     
     # Handle merger specifically
-    merger_params = model.visual.merger.parameters()
-    set_requires_grad(merger_params, training_args.tune_merger)
+    merger_module = resolve_merger_module(vision_tower)
+    if merger_module is not None:
+        merger_params = merger_module.parameters()
+        set_requires_grad(merger_params, training_args.tune_merger)
     
 def configure_llava_vision_tower(model, model_args, training_args, compute_dtype, processor):
     model.get_model().initialize_vision_modules(
@@ -81,11 +146,16 @@ def configure_llava_vision_tower(model, model_args, training_args, compute_dtype
     model.initialize_vision_tokenizer(model_args, tokenizer=processor.tokenizer)
 
 def configure_llm(model, training_args):
-    lm_head = model.lm_head.parameters()
-    set_requires_grad(lm_head, not training_args.freeze_llm)
+    if hasattr(model, "lm_head"):
+        lm_head = model.lm_head.parameters()
+        set_requires_grad(lm_head, not training_args.freeze_llm)
 
-    llm_params = model.model.parameters()
-    set_requires_grad(llm_params, not training_args.freeze_llm)
+    if hasattr(model, "model"):
+        llm_params = model.model.parameters()
+        set_requires_grad(llm_params, not training_args.freeze_llm)
+    elif hasattr(model, "language_model"):
+        llm_params = model.language_model.parameters()
+        set_requires_grad(llm_params, not training_args.freeze_llm)
 
 
 def train():
@@ -101,8 +171,12 @@ def train():
         print("\033[91mWARNING: model_path is not provided, using model_id instead\033[0m")
         model_args.model_path = model_args.model_id
     
-    # Liger-kernel for Qwen2.5 is not supported yet.
-    replace_qwen2_5_with_mixed_modality_forward(use_liger=training_args.use_liger)\
+    use_qwen3_vl = is_qwen3_vl_model(model_args.model_id) or is_qwen3_vl_model(model_args.model_path)
+
+    # Qwen2.5 uses project-specific monkey patch for mixed-modality forward.
+    # For Qwen3-VL we keep the native forward path for compatibility.
+    if not use_qwen3_vl:
+        replace_qwen2_5_with_mixed_modality_forward(use_liger=training_args.use_liger)
     
 
     if training_args.lora_enable and not training_args.freeze_llm:
@@ -127,6 +201,11 @@ def train():
     local_rank = training_args.local_rank
     compute_dtype = (torch.float16 if training_args.fp16 else (torch.bfloat16 if training_args.bf16 else torch.float32))
 
+    rank0_print(
+        f"Runtime args: local_rank={training_args.local_rank}, device={training_args.device}, "
+        f"deepspeed={getattr(training_args, 'deepspeed', None)}, bits={training_args.bits}"
+    )
+
     bnb_model_from_pretrained_args = {}
     if training_args.bits in [4,8]:
         bnb_model_from_pretrained_args.update(dict(
@@ -143,25 +222,67 @@ def train():
             )
         ))
 
-    model = CrystaL_ForConditionalGeneration.from_pretrained(
-        model_args.model_path,
-        torch_dtype=compute_dtype,
-        attn_implementation="flash_attention_2" if not training_args.disable_flash_attn2 else "sdpa", 
-        **bnb_model_from_pretrained_args
-    )
+    if use_qwen3_vl:
+        model = None
+        load_err = None
+
+        try:
+            model = AutoModelForCausalLM.from_pretrained(
+                model_args.model_path,
+                trust_remote_code=True,
+                torch_dtype=compute_dtype,
+                attn_implementation="flash_attention_2" if not training_args.disable_flash_attn2 else "sdpa",
+                **bnb_model_from_pretrained_args,
+            )
+        except Exception as err:
+            load_err = err
+            rank0_print(f"AutoModelForCausalLM load failed for Qwen3-VL, trying fallback class: {err}")
+
+        if model is None:
+            fallback_cls = getattr(transformers, "AutoModelForImageTextToText", None)
+            if fallback_cls is None:
+                fallback_cls = getattr(transformers, "AutoModelForVision2Seq", None)
+
+            if fallback_cls is None:
+                raise RuntimeError(
+                    "Cannot load Qwen3-VL: no suitable AutoModel class found in current transformers version."
+                ) from load_err
+
+            model = fallback_cls.from_pretrained(
+                model_args.model_path,
+                trust_remote_code=True,
+                torch_dtype=compute_dtype,
+                attn_implementation="flash_attention_2" if not training_args.disable_flash_attn2 else "sdpa",
+                **bnb_model_from_pretrained_args,
+            )
+    else:
+        model = CrystaL_ForConditionalGeneration.from_pretrained(
+            model_args.model_path,
+            torch_dtype=compute_dtype,
+            attn_implementation="flash_attention_2" if not training_args.disable_flash_attn2 else "sdpa", 
+            **bnb_model_from_pretrained_args
+        )
+
+    if not use_qwen3_vl:
+        debug_model_devices("qwen2.5_after_from_pretrained", model)
     
-    model.align_vqa_only_stage = training_args.vqa_only_stage
+    if hasattr(model, "align_vqa_only_stage"):
+        model.align_vqa_only_stage = training_args.vqa_only_stage
 
     model.config.use_cache = False
     model_to_configure = model
     configure_llm(model_to_configure, training_args)
     if "Qwen" in model_args.model_id:
         configure_vision_tower(model_to_configure, training_args, compute_dtype, training_args.device)
+    if not use_qwen3_vl:
+        debug_model_devices("qwen2.5_after_configure_vision", model)
     
     if training_args.bits in [4,8]:
         model.config.torch_dtype = (torch.float32 if training_args.fp16 else (torch.bfloat16 if training_args.bf16 else torch.float32))
         from peft import prepare_model_for_kbit_training
         model = prepare_model_for_kbit_training(model, use_gradient_checkpointing=training_args.gradient_checkpointing, gradient_checkpointing_kwargs={"use_reentrant": True})
+        if not use_qwen3_vl:
+            debug_model_devices("qwen2.5_after_prepare_kbit", model)
     
     if training_args.gradient_checkpointing:
         model.enable_input_require_grads()
@@ -185,6 +306,8 @@ def train():
                 model.to(torch.float16)
         rank0_print("Adding LoRA to the model...")
         model = get_peft_model(model, peft_config)
+        if not use_qwen3_vl:
+            debug_model_devices("qwen2.5_after_get_peft_model", model)
         
         for name, param in model.named_parameters():
             if '_projection' in name:
@@ -195,10 +318,10 @@ def train():
                 param.requires_grad = True
         # model.print_trainable_parameters()
 
-    processor = AutoProcessor.from_pretrained(model_args.model_id,
-                                            # The default setting is padding_side="left"
-                                            # When training using the right-side padding is more efficient.
-                                              padding_side="right")
+    processor = AutoProcessor.from_pretrained(model_args.model_path,
+                                        # The default setting is padding_side="left"
+                                        # When training using the right-side padding is more efficient.
+                                          padding_side="right")
 
     # model.config.tokenizer_model_max_length = processor.tokenizer.model_max_length
     model.config.tokenizer_padding_side = processor.tokenizer.padding_side
@@ -225,6 +348,15 @@ def train():
     else:
         old_len = p.data.shape[0]
     new_len = len(processor.tokenizer)
+
+    if new_len > old_len:
+        rank0_print(f"Resizing token embeddings from {old_len} to {new_len}")
+        model.resize_token_embeddings(new_len)
+        if not use_qwen3_vl:
+            debug_model_devices("qwen2.5_after_resize_token_embeddings", model)
+
+    qwen_embed = model.get_input_embeddings()
+    lm_head = model.get_output_embeddings()
        
     if "llava" in model_args.model_id:
         configure_llava_vision_tower(model_to_configure, model_args, training_args, compute_dtype, processor)
@@ -244,9 +376,10 @@ def train():
         ):
             p.requires_grad = True
     
-    _mask = torch.ones(old_len, device=model.device, dtype=torch.bool)
-    _mask[:] = False
-    _mask[old_processor_len:new_len] = True
+    current_vocab_size = model.get_input_embeddings().weight.shape[0]
+    embed_device = model.get_input_embeddings().weight.device
+    _mask = torch.zeros(current_vocab_size, device=embed_device, dtype=torch.bool)
+    _mask[old_processor_len:min(new_len, current_vocab_size)] = True
 
     def row_mask_hook(grad):
         if grad is None:
@@ -270,17 +403,40 @@ def train():
                     if training_args.bf16 and module.weight.dtype == torch.float32:
                         module = module.to(torch.bfloat16)
 
+    # For full-precision training, explicitly place the model on the target device.
+    # Otherwise inputs may be on CUDA while embeddings stay on CPU.
+    if training_args.bits not in [4, 8]:
+        target_device = torch.device(training_args.device)
+        try:
+            current_device = next(model.parameters()).device
+        except StopIteration:
+            current_device = target_device
+
+        if current_device != target_device:
+            rank0_print(f"[DEBUG model_move] moving full-precision model from {current_device} to {target_device}")
+            #model.to(device=target_device)
+        else:
+            rank0_print(f"[DEBUG model_move] full-precision model already on {target_device}")
+
+        if not use_qwen3_vl:
+            debug_model_devices("qwen2.5_after_explicit_model_to_device", model)
+
     data_module = make_supervised_data_module(model_id=model_args.model_id,
                                               processor=processor,
                                               data_args=data_args,
 )
-    
+
+    print("--"*20)
+    print(f"device: {model.device}")
+    print("--"*20)
     trainer = QwenTrainer(
         model=model,
         processor=processor,
         args=training_args,
         **data_module
     )
+    if not use_qwen3_vl:
+        debug_model_devices("qwen2.5_before_trainer_train", model)
     # model.print_trainable_parameters()
 
     if list(pathlib.Path(training_args.output_dir).glob("checkpoint-*")):

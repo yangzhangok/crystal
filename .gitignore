@@ -1,3 +1,6 @@
 __pycache__/
 *.pyc
 train/wandb/
+
+train/output/
+__init__.py

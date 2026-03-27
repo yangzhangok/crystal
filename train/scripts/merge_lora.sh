@@ -1,9 +1,8 @@
 #!/bin/bash
 
-MODEL_NAME="${MODEL_NAME:-/public/home/h202105865/ldy_workdir/zy/qwen2.5vl-7b}"
-MODEL_PATH="${MODEL_PATH:-output/lora_vision_test/lora_direct_FT_4lr_answer_label}"
-SAVE_MODEL_PATH="${SAVE_MODEL_PATH:-output/lora_merged/lora_direct_FT_4lr_answer_label}"
-VISUAL_MODEL_ID="${VISUAL_MODEL_ID:-[]}" #'sam', 'depth', 'dino'
+MODEL_NAME="${MODEL_NAME:-/home/u1120230285/zhangyang/checkpoints/qwen2.5vl-7b}"
+MODEL_PATH="${MODEL_PATH:-/home/u1120230285/zhangyang/crystal/train/output/lora_vision_test/lora_random_drop_5_10}"
+SAVE_MODEL_PATH="${SAVE_MODEL_PATH:-/home/u1120230285/zhangyang/crystal/train/output/lora_merged/lora_random_drop_5_10}"
 VISIBLE_CUDA_DEVICES="${VISIBLE_CUDA_DEVICES:-0}"   
 
 export PYTHONPATH=src:$PYTHONPATH
@@ -14,4 +13,3 @@ python src/merge_lora_weights.py \
     --model-base "$MODEL_NAME"  \
     --save-model-path "$SAVE_MODEL_PATH" \
     --safe-serialization \
-    --anchor-model-id "$VISUAL_MODEL_ID"

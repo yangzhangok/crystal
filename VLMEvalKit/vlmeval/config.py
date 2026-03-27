@@ -1514,7 +1514,7 @@ qwen2vl_series = {
     ),
     "Qwen2.5-VL-3B-Instruct": partial(
         Qwen2VLChat,
-        model_path="/public/home/h202105865/local_llm_workdir/zy/qwen2.5-vl-3b-instruct",
+        model_path="Qwen/Qwen2.5-VL-3B-Instruct",
         min_pixels=1280 * 28 * 28,
         max_pixels=16384 * 28 * 28,
         use_custom_prompt=False,
@@ -1528,7 +1528,7 @@ qwen2vl_series = {
     ),
     "Qwen2.5-VL-7B-Instruct": partial(
         Qwen2VLChat,
-        model_path="/public/home/h202105865/local_llm_workdir/zy/qwen2.5vl-7b",
+        model_path="/home/u1120230285/zhangyang/checkpoints/qwen2.5vl-7b",
         min_pixels=1280 * 28 * 28,
         max_pixels=16384 * 28 * 28,
         use_custom_prompt=False,
@@ -1938,6 +1938,55 @@ covt_series = {
         max_pixels=16384 * 28 * 28,
         use_custom_prompt=False,
     ),
+    "CoVT-7B-depth": partial(
+        CoVTChat,
+        model_path="Wakals/CoVT-7B-depth",
+        min_pixels=1280 * 28 * 28,
+        max_pixels=16384 * 28 * 28,
+        use_custom_prompt=False,
+    ),
+    "CoVT-7B-seg_depth_dino": partial(
+        CoVTChat,
+        model_path="/home/u2112666/CoVT/train/output/lora_merged/lora_stage234_merged_stage1_no_KL",
+        min_pixels=1280 * 28 * 28,
+        max_pixels=16384 * 28 * 28,
+        use_custom_prompt=False,
+    ),
+    "CoVT-7B-seg_depth_dino_edge": partial(
+        CoVTChat,
+        model_path="Wakals/CoVT-7B-seg_depth_dino_edge",
+        min_pixels=1280 * 28 * 28,
+        max_pixels=16384 * 28 * 28,
+        use_custom_prompt=False,
+    ),
+    "CoVT-7B-seg_depth": partial(
+        CoVTChat,
+        model_path="/home/u2112666/CoVT/train/output/lora_merged/lora_stage234_merged",
+        min_pixels=1280 * 28 * 28,
+        max_pixels=16384 * 28 * 28,
+        use_custom_prompt=False,
+    ),
+    "lora_LIVR": partial(
+        CoVTChat,
+        model_path="/home/u2112666/CoVT/train/output/lora_merged/lora_LIVR",
+        min_pixels=1280 * 28 * 28,
+        max_pixels=16384 * 28 * 28,
+        use_custom_prompt=False,
+    ),
+    "Crystal":partial(
+        CoVTChat,
+        model_path="/home/u1120230285/zhangyang/checkpoints/crystal",
+        min_pixels=1280 * 28 * 28,
+        max_pixels=16384 * 28 * 28,
+        use_custom_prompt=False,
+    ),
+    "Crystal_drop_5_10":partial(
+        CoVTChat,
+        model_path="/home/u1120230285/zhangyang/crystal/train/output/lora_merged/lora_random_drop_5_10",
+        min_pixels=1280 * 28 * 28,
+        max_pixels=16384 * 28 * 28,
+        use_custom_prompt=False,
+    )
 }
 
 internvl_groups = [

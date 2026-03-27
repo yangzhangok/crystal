@@ -5,7 +5,7 @@ import warnings
 import os
 import json
 
-from src.training.covt_qwen2_5_vl import CoVTForConditionalGeneration
+from src.training.crystal_qwen2_5_vl import CrystaL_ForConditionalGeneration
 from src.training.constants import *
 
 def disable_torch_init():
@@ -17,7 +17,7 @@ def disable_torch_init():
 
 # This code is borrowed from LLaVA
 def load_pretrained_model(model_path, model_base, model_name, load_8bit=False, load_4bit=False, 
-                          device_map="auto", device="cuda", use_flash_attn=False, anchor_model_id=None, **kwargs):
+                          device_map="auto", device="cuda", use_flash_attn=False, **kwargs):
     kwargs = {"device_map": device_map}
     
     if device != "cuda":
@@ -53,11 +53,8 @@ def load_pretrained_model(model_path, model_base, model_name, load_8bit=False, l
             processor = AutoProcessor.from_pretrained(model_path + "/" + checkpoint_dir)
             print(f'Loading Processor from model path + {checkpoint_dir}...')
         print('Loading Qwen2-VL from base model...')
-        model = CoVTForConditionalGeneration.from_pretrained(model_base, low_cpu_mem_usage=True, config=lora_cfg_pretrained, **kwargs)
+        model = CrystaL_ForConditionalGeneration.from_pretrained(model_base, low_cpu_mem_usage=True, config=lora_cfg_pretrained, **kwargs)
         
-        if anchor_model_id is not None:
-            print(f"Loading anchor model ids: {anchor_model_id}")
-            model.get_anchor_model_ids(anchor_model_id)
         
         token_num, tokem_dim = model.lm_head.out_features, model.lm_head.in_features
         if model.lm_head.weight.shape[0] != token_num:
@@ -85,11 +82,11 @@ def load_pretrained_model(model_path, model_base, model_name, load_8bit=False, l
 
         if "Qwen2.5" in config["_name_or_path"]:
             processor = AutoProcessor.from_pretrained(model_path)
-            model = CoVTForConditionalGeneration.from_pretrained(model_path, low_cpu_mem_usage=True, **kwargs)
+            model = CrystaL_ForConditionalGeneration.from_pretrained(model_path, low_cpu_mem_usage=True, **kwargs)
 
         else:
             processor = AutoProcessor.from_pretrained(model_path)
-            model = CoVTForConditionalGeneration.from_pretrained(model_path, low_cpu_mem_usage=True, **kwargs)
+            model = CrystaL_ForConditionalGeneration.from_pretrained(model_path, low_cpu_mem_usage=True, **kwargs)
 
     return processor, model
 

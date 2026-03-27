@@ -130,9 +130,9 @@ def main():
     MAX_CONCURRENT_FILES = 3  # Recommended: 1-3 (1=sequential file processing with parallel rows, 2-3=parallel file processing)
     # ==================================
     
-    base_dir = "/public/zy/covt-collection/covt-dataset"
-    dump_image_dir = "/public/zy/covt-collection/images"
-    output_file = "/public/zy/covt-collection/data.json"
+    base_dir = "/home/u1120230285/zhangyang/covt-dataset/snapshots/parquet"
+    dump_image_dir = "/home/u1120230285/zhangyang/covt-dataset/images"
+    output_file = "/home/u1120230285/zhangyang/covt-dataset/data.json"
 
     # Create directory
     if not os.path.exists(dump_image_dir):

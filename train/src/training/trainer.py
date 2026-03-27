@@ -1,13 +1,12 @@
 import os
 import torch
 import torch.nn as nn
+import inspect
 from deepspeed.utils import safe_get_full_grad
 
 from transformers import Trainer, TrainerCallback
 from transformers.trainer import (
     is_sagemaker_mp_enabled,
-    get_parameter_names,
-    ALL_LAYERNORM_LAYERS,
     is_peft_available,
     WEIGHTS_NAME,
     TRAINING_ARGS_NAME,
@@ -16,6 +15,27 @@ from transformers.trainer import (
     PREFIX_CHECKPOINT_DIR,
     logger,
 )
+try:
+    from transformers.trainer_pt_utils import get_parameter_names
+except Exception:
+    def get_parameter_names(model, forbidden_layer_types):
+        result = []
+        for name, child in model.named_children():
+            child_params = get_parameter_names(child, forbidden_layer_types)
+            result += [f"{name}.{n}" for n in child_params]
+
+        result += list(model._parameters.keys())
+        result = [
+            n for n in result
+            if not any(isinstance(model.get_submodule(n.rsplit(".", 1)[0]), t) for t in forbidden_layer_types)
+            or "." not in n
+        ]
+        return result
+
+try:
+    from transformers.pytorch_utils import ALL_LAYERNORM_LAYERS
+except Exception:
+    from transformers.trainer import ALL_LAYERNORM_LAYERS
 import safetensors
 from peft import PeftModel
 from typing import Optional
@@ -43,11 +63,88 @@ class QwenTrainer(Trainer):
 
     def __init__(self, processor, *args, **kwargs):
         super(QwenTrainer, self).__init__(*args, **kwargs)
+        print(f"[DEBUG Trainer.__init__] model device after super().__init__: {next(self.model.parameters()).device if hasattr(self.model, 'parameters') else 'N/A'}")
         self.processor = processor
         
     def evaluation_loop(self, dataloader, description, prediction_loss_only = None, ignore_keys = None, metric_key_prefix = "eval"):
         print("I got it! Maybe for future usage")
         return super().evaluation_loop(dataloader, description, prediction_loss_only, ignore_keys, metric_key_prefix)
+
+    def _is_qwen3_vl(self):
+        target_model = self.model
+        if hasattr(self.model, "get_base_model"):
+            try:
+                target_model = self.model.get_base_model()
+            except Exception:
+                target_model = self.model
+
+        model_type = ""
+        if hasattr(target_model, "config") and target_model.config is not None:
+            model_type = str(getattr(target_model.config, "model_type", "")).lower()
+
+        class_name = target_model.__class__.__name__.lower()
+        return ("qwen3" in model_type and "vl" in model_type) or ("qwen3" in class_name and "vl" in class_name)
+
+    def _normalize_qwen3_inputs(self, inputs):
+        # Qwen3-VL native forward expects a 2D attention mask for rope indexing.
+        # Our dataset may provide custom 4D masks for qwen2.5-specific training paths.
+        if not self._is_qwen3_vl():
+            return inputs
+
+        if "sequence_index" in inputs:
+            inputs.pop("sequence_index", None)
+
+        attention_mask = inputs.get("attention_mask", None)
+        if isinstance(attention_mask, torch.Tensor) and attention_mask.dim() == 4:
+            input_ids = inputs.get("input_ids", None)
+            if isinstance(input_ids, torch.Tensor):
+                pad_token_id = None
+                if hasattr(self, "processor") and self.processor is not None:
+                    tok = getattr(self.processor, "tokenizer", None)
+                    if tok is not None:
+                        pad_token_id = getattr(tok, "pad_token_id", None)
+
+                if pad_token_id is None:
+                    new_mask = torch.ones_like(input_ids, dtype=torch.long)
+                else:
+                    new_mask = (input_ids != pad_token_id).to(dtype=torch.long)
+
+                inputs["attention_mask"] = new_mask
+
+        return inputs
+
+    def _prepare_inputs(self, inputs):
+        inputs = super()._prepare_inputs(inputs)
+
+        try:
+            target_model = self.model
+            if hasattr(self.model, "get_base_model"):
+                try:
+                    target_model = self.model.get_base_model()
+                except Exception:
+                    target_model = self.model
+
+            signature = inspect.signature(target_model.forward)
+            params = signature.parameters
+
+            # PEFT wrappers often expose `forward(*args, **kwargs)`.
+            # In that case we must not filter, otherwise critical keys like
+            # `input_ids` may be dropped and downstream embedding() receives None.
+            if any(p.kind == inspect.Parameter.VAR_KEYWORD for p in params.values()):
+                return self._normalize_qwen3_inputs(inputs)
+
+            supported_keys = set(params.keys())
+            filtered_inputs = {k: v for k, v in inputs.items() if k in supported_keys}
+
+            # Safety fallback: never return a dict without core model inputs.
+            core_keys = {"input_ids", "inputs_embeds", "pixel_values", "labels"}
+            if len(filtered_inputs) == 0 or (core_keys & set(filtered_inputs.keys()) == set()):
+                return self._normalize_qwen3_inputs(inputs)
+
+            return self._normalize_qwen3_inputs(filtered_inputs)
+        except Exception:
+            # Fall back to default behavior if signature inspection fails.
+            return self._normalize_qwen3_inputs(inputs)
 
     def create_optimizer(self):
         """

@@ -42,7 +42,13 @@ import numpy as np
 import os
 
 from transformers.activations import ACT2FN
-from transformers.cache_utils import Cache, DynamicCache, SlidingWindowCache, StaticCache
+from transformers.cache_utils import Cache, DynamicCache, StaticCache
+try:
+    from transformers.cache_utils import SlidingWindowCache
+except Exception:
+    # Compatibility fallback for transformers versions that do not expose SlidingWindowCache.
+    class SlidingWindowCache:  # type: ignore[no-redef]
+        pass
 from transformers.generation import GenerationMixin
 from transformers.modeling_attn_mask_utils import AttentionMaskConverter
 from transformers.modeling_outputs import BaseModelOutputWithPast, ModelOutput
@@ -52,7 +58,6 @@ from transformers.utils import (
     add_start_docstrings,
     add_start_docstrings_to_model_forward,
     is_flash_attn_2_available,
-    is_flash_attn_greater_or_equal_2_10,
     logging,
     replace_return_docstrings,
 )
@@ -971,7 +976,16 @@ class Qwen2_5_VLFlashAttention2(Qwen2_5_VLAttention):
         # TODO: Should be removed once Flash Attention for RoCm is bumped to 2.1.
         # flash_attn<2.1 generates top-left aligned causal mask, while what is needed here is bottom-right alignement, that was made default for flash_attn>=2.1. This attribute is used to handle this difference. Reference: https://github.com/Dao-AILab/flash-attention/releases/tag/v2.1.0.
         # Beware that with flash_attn<2.1, using q_seqlen != k_seqlen (except for the case q_seqlen == 1) produces a wrong mask (top-left).
-        self._flash_attn_uses_top_left_mask = not is_flash_attn_greater_or_equal_2_10()
+        try:
+            from flash_attn import _flash_attn_version
+            self._flash_attn_uses_top_left_mask = _flash_attn_version < (2, 1)
+        except (ImportError, AttributeError):
+            try:
+                import flash_attn
+                fa_ver = getattr(flash_attn, '__version__', '0.0.0')
+                self._flash_attn_uses_top_left_mask = tuple(map(int, fa_ver.split('.')[:2])) < (2, 1)
+            except:
+                self._flash_attn_uses_top_left_mask = True
 
     def forward(
         self,

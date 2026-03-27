@@ -89,7 +89,6 @@ class CoVTChat(CoVTPrompt, BaseModel):
             top_k=top_k,
             temperature=temperature,
             repetition_penalty=repetition_penalty,
-            do_sample=False,
         )
         self.system_prompt = system_prompt
         self.verbose = verbose
