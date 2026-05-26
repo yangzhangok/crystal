@@ -6,7 +6,7 @@ An official repository of article: [CrystaL: Spontaneous Emergence of Visual Lat
 
 - [Training Guide](docs/TRAIN.md)
 - [Evaluation Guide](docs/EVAL.md)
-- [Model Checkpoint]([docs/EVAL.md](https://huggingface.co/young13579/crystal)
+- [Model Checkpoint](https://huggingface.co/young13579/crystal)
 ## Overview
 
 CrystaL is a vision-language model built on Qwen2.5-VL, featuring advanced capabilities in visual understanding and reasoning.
